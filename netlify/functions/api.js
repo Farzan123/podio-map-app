@@ -2,7 +2,7 @@ const axios = require('axios');
 
 let cachedLeads = [];
 let lastFetchTime = 0;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 5 * 60 * 1000;
 
 exports.handler = async (event, context) => {
     try {
@@ -20,7 +20,6 @@ exports.handler = async (event, context) => {
         const PODIO_APP_ID = process.env.PODIO_APP_ID;
         const PODIO_APP_TOKEN = process.env.PODIO_APP_TOKEN;
 
-        // 1. Authenticate with Podio
         const authResponse = await axios.post('https://api.podio.com/oauth/token', {
             grant_type: 'app',
             app_id: PODIO_APP_ID,
@@ -31,7 +30,6 @@ exports.handler = async (event, context) => {
 
         const accessToken = authResponse.data.access_token;
 
-        // 2. Fetch all items using pagination loop (Chunks of 100)
         let allItems = [];
         let offset = 0;
         const limit = 100;
@@ -59,11 +57,10 @@ exports.handler = async (event, context) => {
             }
         }
 
-        // 3. Map leads data
         const mappedLeads = allItems.map(item => {
             let name = item.title || "No Name";
             let address = "";
-            let knockResult = "No Answer";
+            let knockResult = "";
 
             item.fields.forEach(field => {
                 if (field.type === "location" && field.values.length > 0) {
@@ -75,7 +72,7 @@ exports.handler = async (event, context) => {
             });
 
             return { name, address, knockResult };
-        }).filter(lead => lead.address !== "");
+        }).filter(lead => lead.address !== "" && lead.knockResult !== "");
 
         cachedLeads = mappedLeads;
         lastFetchTime = now;

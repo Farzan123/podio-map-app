@@ -20,13 +20,16 @@ exports.handler = async (event, context) => {
         const PODIO_APP_ID = process.env.PODIO_APP_ID;
         const PODIO_APP_TOKEN = process.env.PODIO_APP_TOKEN;
 
-        // 1. Authenticate with Podio (Correct Payload)
-        const authResponse = await axios.post('https://api.podio.com/oauth/token', {
-            grant_type: 'app',
-            app_id: PODIO_APP_ID,
-            app_token: PODIO_APP_TOKEN,
-            client_id: PODIO_CLIENT_ID,
-            client_secret: PODIO_CLIENT_SECRET
+        // 1. Podio OAuth Token (URLSearchParams Format Fix)
+        const params = new URLSearchParams();
+        params.append('grant_type', 'app');
+        params.append('app_id', PODIO_APP_ID);
+        params.append('app_token', PODIO_APP_TOKEN);
+        params.append('client_id', PODIO_CLIENT_ID);
+        params.append('client_secret', PODIO_CLIENT_SECRET);
+
+        const authResponse = await axios.post('https://api.podio.com/oauth/token', params, {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
         });
 
         const accessToken = authResponse.data.access_token;

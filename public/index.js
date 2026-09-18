@@ -3,11 +3,11 @@ let geocoder;
 let loadedAddresses = new Set();
 
 const markerIcons = {
-    red: "http://maps.google.com/mapfiles/ms/icons/red-dot.png",
-    blue: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
-    yellow: "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png",
-    purple: "http://maps.google.com/mapfiles/ms/icons/purple-dot.png",
-    green: "http://maps.google.com/mapfiles/ms/icons/green-dot.png"
+    red: "https://maps.google.com/mapfiles/ms/icons/red-dot.png",
+    blue: "https://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+    yellow: "https://maps.google.com/mapfiles/ms/icons/yellow-dot.png",
+    purple: "https://maps.google.com/mapfiles/ms/icons/purple-dot.png",
+    green: "https://maps.google.com/mapfiles/ms/icons/green-dot.png"
 };
 
 function getMarkerIcon(knockResult) {
@@ -34,7 +34,7 @@ function initMap() {
 
     setInterval(() => {
         fetchAndAppendLeads();
-    }, 3000);
+    }, 15000);
 }
 
 function addLegendWidget(map) {
@@ -94,7 +94,7 @@ function createMarker(latLng, title, address, knockResult, iconUrl) {
 
 async function fetchAndAppendLeads() {
     try {
-        const response = await fetch('/api/leads');
+        const response = await fetch('/.netlify/functions/api/leads');
         const leads = await response.json();
 
         if (!Array.isArray(leads) || leads.length === 0) return;
@@ -112,18 +112,16 @@ async function fetchAndAppendLeads() {
             const knockResult = lead.knockResult;
             const iconUrl = getMarkerIcon(knockResult);
 
-            // Direct Lat/Lng plot if available (0 ms delay)
             if (lead.lat && lead.lng) {
                 createMarker({ lat: lead.lat, lng: lead.lng }, leadName, leadAddress, knockResult, iconUrl);
             } else {
-                // Throttle geocoding for un-geocoded entries
                 setTimeout(() => {
                     geocoder.geocode({ address: leadAddress }, (results, status) => {
                         if (status === "OK" && results[0]) {
                             createMarker(results[0].geometry.location, leadName, leadAddress, knockResult, iconUrl);
                         }
                     });
-                }, index * 250);
+                }, index * 500);
             }
         });
 

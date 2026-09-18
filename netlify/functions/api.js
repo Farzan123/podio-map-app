@@ -102,7 +102,7 @@ async function fetchLeads() {
     return allLeads;
 }
 
-// Sub-route definition
+// Support both root /leads and function subpath
 router.get('/leads', async (req, res) => {
     try {
         const leads = await fetchLeads();
@@ -112,6 +112,16 @@ router.get('/leads', async (req, res) => {
     }
 });
 
+router.get('/', async (req, res) => {
+    try {
+        const leads = await fetchLeads();
+        res.json(leads);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.use('/.netlify/functions/api', router);
+app.use('/api', router);
 
 module.exports.handler = serverless(app);

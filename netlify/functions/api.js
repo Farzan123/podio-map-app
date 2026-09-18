@@ -38,9 +38,10 @@ exports.handler = async (event, context) => {
         let allItems = [];
         let offset = 0;
         const limit = 100;
-        let hasMore = true;
+        const maxPages = 5; // 500 items max per request
+        let page = 0;
 
-        while (hasMore) {
+        while (page < maxPages) {
             const itemsResponse = await axios.post(
                 `https://api.podio.com/item/app/${PODIO_APP_ID}/filter/`,
                 { limit: limit, offset: offset },
@@ -56,9 +57,10 @@ exports.handler = async (event, context) => {
             allItems = allItems.concat(items);
 
             if (items.length < limit) {
-                hasMore = false;
+                break;
             } else {
                 offset += limit;
+                page++;
             }
         }
 

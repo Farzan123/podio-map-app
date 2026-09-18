@@ -20,6 +20,7 @@ exports.handler = async (event, context) => {
         const PODIO_APP_ID = process.env.PODIO_APP_ID;
         const PODIO_APP_TOKEN = process.env.PODIO_APP_TOKEN;
 
+        // 1. Authenticate with Podio (Correct Payload)
         const authResponse = await axios.post('https://api.podio.com/oauth/token', {
             grant_type: 'app',
             app_id: PODIO_APP_ID,
@@ -30,6 +31,7 @@ exports.handler = async (event, context) => {
 
         const accessToken = authResponse.data.access_token;
 
+        // 2. Fetch Items in Chunks of 100
         let allItems = [];
         let offset = 0;
         const limit = 100;
@@ -57,19 +59,22 @@ exports.handler = async (event, context) => {
             }
         }
 
+        // 3. Filter Records (Must have Knock Result + Address)
         const mappedLeads = allItems.map(item => {
             let name = item.title || "No Name";
             let address = "";
             let knockResult = "";
 
-            item.fields.forEach(field => {
-                if (field.type === "location" && field.values.length > 0) {
-                    address = field.values[0].formatted || field.values[0].value;
-                }
-                if (field.label === "Knock Result" && field.values.length > 0) {
-                    knockResult = field.values[0].value.text;
-                }
-            });
+            if (item.fields) {
+                item.fields.forEach(field => {
+                    if (field.type === "location" && field.values && field.values.length > 0) {
+                        address = field.values[0].formatted || field.values[0].value;
+                    }
+                    if (field.label === "Knock Result" && field.values && field.values.length > 0) {
+                        knockResult = field.values[0].value.text || field.values[0].value;
+                    }
+                });
+            }
 
             return { name, address, knockResult };
         }).filter(lead => lead.address !== "" && lead.knockResult !== "");
@@ -84,10 +89,14 @@ exports.handler = async (event, context) => {
         };
 
     } catch (error) {
-        console.error("Podio API Error:", error.response ? error.response.data : error.message);
+        console.error("Podio API Error Details:", error.response ? error.response.data : error.message);
         return {
             statusCode: 500,
-            body: JSON.stringify({ error: "Failed to fetch data from Podio" })
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+                error: "Failed to fetch data from Podio",
+                details: error.response ? error.response.data : error.message 
+            })
         };
     }
 };

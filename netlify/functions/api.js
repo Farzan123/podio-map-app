@@ -30,7 +30,6 @@ async function authenticatePodio() {
         });
 
         accessToken = response.data.access_token;
-        console.log('Podio authenticated successfully!');
     } catch (error) {
         console.error('Error authenticating with Podio:', error.response ? error.response.data : error.message);
     }
@@ -82,42 +81,28 @@ async function fetchLeads() {
     let allLeads = [];
     if (!accessToken) await authenticatePodio();
 
-    let offset = 0;
-    const limit = 200;
-    let hasMore = true;
-
-    while (hasMore) {
-        try {
-            const response = await axios.post(
-                `https://api.podio.com/item/app/${PODIO_APP_ID}/filter/`,
-                { limit: limit, offset: offset },
-                {
-                    headers: {
-                        'Authorization': `OAuth2 ${accessToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    timeout: 25000
-                }
-            );
-
-            const items = response.data.items || [];
-            const batchProcessed = processItems(items);
-
-            allLeads = allLeads.concat(batchProcessed);
-
-            if (items.length < limit) {
-                hasMore = false;
-            } else {
-                offset += limit;
+    try {
+        const response = await axios.post(
+            `https://api.podio.com/item/app/${PODIO_APP_ID}/filter/`,
+            { limit: 100, offset: 0 },
+            {
+                headers: {
+                    'Authorization': `OAuth2 ${accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                timeout: 10000
             }
-        } catch (batchError) {
-            console.error(`Error fetching offset ${offset}:`, batchError.message);
-            hasMore = false;
-        }
+        );
+
+        const items = response.data.items || [];
+        allLeads = processItems(items);
+    } catch (error) {
+        console.error("Podio Fetch Error:", error.message);
     }
     return allLeads;
 }
 
+// Sub-route definition
 router.get('/leads', async (req, res) => {
     try {
         const leads = await fetchLeads();

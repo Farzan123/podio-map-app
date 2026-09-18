@@ -9,10 +9,10 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-const PODIO_CLIENT_ID = 'sellerleads-64t6gr';
-const PODIO_CLIENT_SECRET = 'nrhu9ywaFPnQ2ltklo2BkRb4BHH0txNXIkZe9eYciGsVpRjCUyDIHdlIhfeFdxkL';
-const PODIO_APP_ID = '30311034';
-const PODIO_APP_TOKEN = 'f29e52965bd998ed77841c2a453005f2';
+const PODIO_CLIENT_ID = process.env.PODIO_CLIENT_ID;
+const PODIO_CLIENT_SECRET = process.env.PODIO_CLIENT_SECRET;
+const PODIO_APP_ID = process.env.PODIO_APP_ID;
+const PODIO_APP_TOKEN = process.env.PODIO_APP_TOKEN;
 
 let accessToken = '';
 let cachedLeads = [];

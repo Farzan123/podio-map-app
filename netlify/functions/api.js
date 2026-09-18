@@ -1,127 +1,96 @@
-const express = require('express');
 const axios = require('axios');
-const cors = require('cors');
-const serverless = require('serverless-http');
 
-const app = express();
-const router = express.Router();
+let cachedLeads = [];
+let lastFetchTime = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-app.use(cors());
-app.use(express.json());
-
-const PODIO_CLIENT_ID = 'sellerleads-64t6gr';
-const PODIO_CLIENT_SECRET = 'nrhu9ywaFPnQ2ltklo2BkRb4BHH0txNXIkZe9eYciGsVpRjCUyDIHdlIhfeFdxkL';
-const PODIO_APP_ID = '30311034';
-const PODIO_APP_TOKEN = 'f29e52965bd998ed77841c2a453005f2';
-
-let accessToken = '';
-
-async function authenticatePodio() {
+exports.handler = async (event, context) => {
     try {
-        const params = new URLSearchParams();
-        params.append('grant_type', 'app');
-        params.append('client_id', PODIO_CLIENT_ID);
-        params.append('client_secret', PODIO_CLIENT_SECRET);
-        params.append('app_id', PODIO_APP_ID);
-        params.append('app_token', PODIO_APP_TOKEN);
+        const now = Date.now();
+        if (cachedLeads.length > 0 && (now - lastFetchTime) < CACHE_DURATION) {
+            return {
+                statusCode: 200,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(cachedLeads)
+            };
+        }
 
-        const response = await axios.post('https://podio.com/oauth/token', params.toString(), {
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        const PODIO_CLIENT_ID = process.env.PODIO_CLIENT_ID;
+        const PODIO_CLIENT_SECRET = process.env.PODIO_CLIENT_SECRET;
+        const PODIO_APP_ID = process.env.PODIO_APP_ID;
+        const PODIO_APP_TOKEN = process.env.PODIO_APP_TOKEN;
+
+        // 1. Authenticate with Podio
+        const authResponse = await axios.post('https://api.podio.com/oauth/token', {
+            grant_type: 'app',
+            app_id: PODIO_APP_ID,
+            app_token: PODIO_APP_TOKEN,
+            client_id: PODIO_CLIENT_ID,
+            client_secret: PODIO_CLIENT_SECRET
         });
 
-        accessToken = response.data.access_token;
-    } catch (error) {
-        console.error('Error authenticating with Podio:', error.response ? error.response.data : error.message);
-    }
-}
+        const accessToken = authResponse.data.access_token;
 
-function processItems(items) {
-    return items.map(item => {
-        let address = "";
-        let lat = null;
-        let lng = null;
-        let knockResult = "";
-        let name = item.title || "Podio Lead";
+        // 2. Fetch all items using pagination loop (Chunks of 100)
+        let allItems = [];
+        let offset = 0;
+        const limit = 100;
+        let hasMore = true;
 
-        item.fields.forEach(field => {
-            if (field.external_id === "property-address-map" || field.label === "Property Address") {
-                if (field.values && field.values.length > 0) {
-                    const val = field.values[0];
-                    address = val.formatted || val.value || "";
-                    if (val.lat && val.lng) {
-                        lat = parseFloat(val.lat);
-                        lng = parseFloat(val.lng);
+        while (hasMore) {
+            const itemsResponse = await axios.post(
+                `https://api.podio.com/item/app/${PODIO_APP_ID}/filter/`,
+                { limit: limit, offset: offset },
+                {
+                    headers: {
+                        'Authorization': `OAuth2 ${accessToken}`,
+                        'Content-Type': 'application/json'
                     }
                 }
-            }
+            );
 
-            if (field.external_id === "knock-result" || field.label === "Knock Result") {
-                if (field.values && field.values.length > 0) {
-                    const val = field.values[0].value;
-                    if (typeof val === 'object' && val !== null) {
-                        knockResult = val.text || val.title || "";
-                    } else if (typeof val === 'string') {
-                        knockResult = val;
-                    }
+            const items = itemsResponse.data.items || [];
+            allItems = allItems.concat(items);
+
+            if (items.length < limit) {
+                hasMore = false;
+            } else {
+                offset += limit;
+            }
+        }
+
+        // 3. Map leads data
+        const mappedLeads = allItems.map(item => {
+            let name = item.title || "No Name";
+            let address = "";
+            let knockResult = "No Answer";
+
+            item.fields.forEach(field => {
+                if (field.type === "location" && field.values.length > 0) {
+                    address = field.values[0].formatted || field.values[0].value;
                 }
-            }
-
-            if (field.external_id === "seller-name" || field.label === "Seller Name") {
-                if (field.values && field.values.length > 0) {
-                    name = field.values[0].value || name;
+                if (field.label === "Knock Result" && field.values.length > 0) {
+                    knockResult = field.values[0].value.text;
                 }
-            }
-        });
+            });
 
-        return { name, address, lat, lng, knockResult: knockResult.trim() };
-    }).filter(lead => lead.address !== "" && lead.knockResult !== "" && lead.knockResult.toLowerCase() !== "uncategorized");
-}
+            return { name, address, knockResult };
+        }).filter(lead => lead.address !== "");
 
-async function fetchLeads() {
-    let allLeads = [];
-    if (!accessToken) await authenticatePodio();
+        cachedLeads = mappedLeads;
+        lastFetchTime = now;
 
-    try {
-        const response = await axios.post(
-            `https://api.podio.com/item/app/${PODIO_APP_ID}/filter/`,
-            { limit: 100, offset: 0 },
-            {
-                headers: {
-                    'Authorization': `OAuth2 ${accessToken}`,
-                    'Content-Type': 'application/json'
-                },
-                timeout: 10000
-            }
-        );
+        return {
+            statusCode: 200,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(cachedLeads)
+        };
 
-        const items = response.data.items || [];
-        allLeads = processItems(items);
     } catch (error) {
-        console.error("Podio Fetch Error:", error.message);
+        console.error("Podio API Error:", error.response ? error.response.data : error.message);
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ error: "Failed to fetch data from Podio" })
+        };
     }
-    return allLeads;
-}
-
-// Support both root /leads and function subpath
-router.get('/leads', async (req, res) => {
-    try {
-        const leads = await fetchLeads();
-        res.json(leads);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-router.get('/', async (req, res) => {
-    try {
-        const leads = await fetchLeads();
-        res.json(leads);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.use('/.netlify/functions/api', router);
-app.use('/api', router);
-
-module.exports.handler = serverless(app);
+};

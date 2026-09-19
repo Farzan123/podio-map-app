@@ -38,7 +38,7 @@ exports.handler = async (event, context) => {
         let allItems = [];
         let offset = 0;
         const limit = 100;
-        const maxPages = 20; // 500 items max per request
+        const maxPages = 5; // 500 items max per request
         let page = 0;
 
         while (page < maxPages) {

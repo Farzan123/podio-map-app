@@ -2,7 +2,7 @@ const axios = require('axios');
 
 let cachedLeads = [];
 let lastFetchTime = 0;
-const CACHE_DURATION = 5 * 60 * 1000;
+const CACHE_DURATION = 30 * 60 * 1000;
 
 exports.handler = async (event, context) => {
     try {

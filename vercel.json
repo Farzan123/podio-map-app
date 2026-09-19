@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/.netlify/functions/api/leads", "destination": "/api/leads" },
+    { "source": "/api/leads", "destination": "/api/leads" },
+    { "source": "/(.*)", "destination": "/public/$1" }
+  ]
+}

@@ -2,7 +2,7 @@ const axios = require('axios');
 
 let cachedLeads = [];
 let lastFetchTime = 0;
-const CACHE_DURATION = 30 * 60 * 1000;
+const CACHE_DURATION = 30 * 60 * 1000; // 30 mins
 
 exports.handler = async (event, context) => {
     try {
@@ -20,7 +20,7 @@ exports.handler = async (event, context) => {
         const PODIO_APP_ID = process.env.PODIO_APP_ID;
         const PODIO_APP_TOKEN = process.env.PODIO_APP_TOKEN;
 
-        // 1. Podio OAuth Token (URLSearchParams Format Fix)
+        // 1. Podio OAuth Token
         const params = new URLSearchParams();
         params.append('grant_type', 'app');
         params.append('app_id', PODIO_APP_ID);
@@ -34,38 +34,22 @@ exports.handler = async (event, context) => {
 
         const accessToken = authResponse.data.access_token;
 
-        // 2. Fetch Items in Chunks of 100
-        let allItems = [];
-        let offset = 0;
-        const limit = 100;
-        const maxPages = 5; // 500 items max per request
-        let page = 0;
-
-        while (page < maxPages) {
-            const itemsResponse = await axios.post(
-                `https://api.podio.com/item/app/${PODIO_APP_ID}/filter/`,
-                { limit: limit, offset: offset },
-                {
-                    headers: {
-                        'Authorization': `OAuth2 ${accessToken}`,
-                        'Content-Type': 'application/json'
-                    }
+        // 2. Single Filter Request (Limit 100)
+        const itemsResponse = await axios.post(
+            `https://api.podio.com/item/app/${PODIO_APP_ID}/filter/`,
+            { limit: 100, offset: 0 },
+            {
+                headers: {
+                    'Authorization': `OAuth2 ${accessToken}`,
+                    'Content-Type': 'application/json'
                 }
-            );
-
-            const items = itemsResponse.data.items || [];
-            allItems = allItems.concat(items);
-
-            if (items.length < limit) {
-                break;
-            } else {
-                offset += limit;
-                page++;
             }
-        }
+        );
 
-        // 3. Filter Records (Must have Knock Result + Address)
-        const mappedLeads = allItems.map(item => {
+        const items = itemsResponse.data.items || [];
+
+        // 3. Map & Filter Records (Knock Result + Address)
+        const mappedLeads = items.map(item => {
             let name = item.title || "No Name";
             let address = "";
             let knockResult = "";
@@ -98,9 +82,9 @@ exports.handler = async (event, context) => {
         return {
             statusCode: 500,
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
                 error: "Failed to fetch data from Podio",
-                details: error.response ? error.response.data : error.message 
+                details: error.response ? error.response.data : error.message
             })
         };
     }
